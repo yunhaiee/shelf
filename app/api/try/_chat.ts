@@ -95,7 +95,10 @@ export async function runChat(turns: ChatTurn[], mcpUrl: string): Promise<ChatRe
   const reply =
     texts.join("\n\n").trim() ||
     (stopReason === "refusal" ? "Sorry, I can't help with that one." : "I couldn't finish that. Try asking again.");
-  const approveUrl = reply.match(APPROVE_RE)?.[0] ?? fullResults.map((r) => r.match(APPROVE_RE)?.[0]).find(Boolean) ?? null;
+  // Trust the create_checkout tool result first (the model's text could repeat any URL); strip sentence punctuation.
+  const tidy = (u: string | undefined) => u?.replace(/[.,;:!?]+$/, "");
+  const fromTool = tidy([...fullResults].reverse().map((r) => r.match(APPROVE_RE)?.[0]).find(Boolean));
+  const approveUrl = fromTool ?? tidy(reply.match(APPROVE_RE)?.[0]) ?? null;
 
   // Keep ids (product_id / order_id) in history so later turns ("Did it go through?") can call tools again.
   const notes = tools
