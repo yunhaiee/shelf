@@ -53,6 +53,61 @@ function approveLink(o: PaypalOrder) {
   return (o.links ?? []).find((l) => l.rel === "payer-action")?.href ?? (o.links ?? []).find((l) => l.rel === "approve")?.href;
 }
 
+// ---------- ship-to (agent-set gift address) ----------
+
+/** A shipping address the agent supplies (e.g. a gift shipped to someone other than the buyer). */
+export type ShipTo = {
+  name: string;
+  line1: string;
+  line2?: string | null;
+  city: string;
+  state: string;
+  postalCode: string;
+  countryCode?: string | null; // ISO 3166-1 alpha-2, default US
+};
+
+const SHIP_TO_FIELDS = [
+  ["name", "ship_to_name"],
+  ["line1", "ship_to_address_line1"],
+  ["city", "ship_to_city"],
+  ["state", "ship_to_state"],
+  ["postalCode", "ship_to_postal_code"],
+] as const;
+
+/**
+ * Validates raw ship-to fields. Returns null when none are given (buyer's PayPal address is used),
+ * the normalized ShipTo when all required ones are given, or the missing input names when partial.
+ */
+export function parseShipTo(raw: Partial<Record<keyof ShipTo, string | null | undefined>>):
+  | { shipTo: ShipTo; missing?: undefined }
+  | { shipTo?: undefined; missing: string[] }
+  | null {
+  const v = (k: keyof ShipTo) => raw[k]?.trim() || "";
+  const any = (["name", "line1", "line2", "city", "state", "postalCode", "countryCode"] as const).some((k) => v(k));
+  if (!any) return null;
+  const missing = SHIP_TO_FIELDS.filter(([k]) => !v(k)).map(([, name]) => name);
+  if (missing.length) return { missing };
+  const countryCode = (v("countryCode") || "US").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(countryCode)) return { missing: ["ship_to_country (2-letter code like US)"] };
+  return {
+    shipTo: {
+      name: v("name").slice(0, 300),
+      line1: v("line1").slice(0, 300),
+      line2: v("line2").slice(0, 300) || null,
+      city: v("city").slice(0, 120),
+      state: (countryCode === "US" ? v("state").toUpperCase() : v("state")).slice(0, 300),
+      postalCode: v("postalCode").slice(0, 60),
+      countryCode,
+    },
+  };
+}
+
+/** "Jiwoo Park, 123 Maple Ave, Portland, OR 97214" (country appended when not US). */
+export function formatShipTo(s: ShipTo): string {
+  const cc = (s.countryCode || "US").toUpperCase();
+  return [s.name, s.line1, s.line2, s.city, `${s.state} ${s.postalCode}`, cc === "US" ? null : cc].filter(Boolean).join(", ");
+}
+
 // ---------- create ----------
 
 export async function createCheckout(i: {
@@ -62,6 +117,8 @@ export async function createCheckout(i: {
   query?: string | null;
   giftNote?: string | null;
   shipToName?: string | null;
+  /** Agent-set address. When present PayPal ships to it (SET_PROVIDED_ADDRESS); otherwise the buyer's PayPal address. */
+  shipTo?: ShipTo | null;
 }): Promise<{ order: Order; approveUrl: string; product: Product; shop: Shop }> {
   const productId = String(i.productId ?? "").trim();
   if (!UUID_RE.test(productId)) throw new Error(`No product with id "${productId}". Use a product_id from search_products.`);
@@ -79,6 +136,13 @@ export async function createCheckout(i: {
   if (product.stock <= 0) throw new Error(`"${product.title}" from ${shop.name} is out of stock.`);
   if (product.stock < qty) throw new Error(`Only ${product.stock} of "${product.title}" left in stock.`);
 
+  let shipTo: ShipTo | null = null;
+  if (i.shipTo) {
+    const parsed = parseShipTo(i.shipTo);
+    if (parsed?.missing) throw new Error(`The shipping address is incomplete. Missing: ${parsed.missing.join(", ")}.`);
+    shipTo = parsed?.shipTo ?? null;
+  }
+
   const currency = (product.currency || "USD").toUpperCase();
   const unitMinor = toMinor(product.price, currency);
   if (!Number.isFinite(unitMinor) || unitMinor <= 0) throw new Error(`"${product.title}" doesn't have a valid price yet.`);
@@ -95,7 +159,8 @@ export async function createCheckout(i: {
     client_name: clean(i.clientName, 120),
     query: clean(i.query, 500),
     gift_note: clean(i.giftNote, 500),
-    ship_to_name: clean(i.shipToName, 300),
+    // No address column: an agent-set ship-to is stored as one readable line ("Name, street, City, ST zip").
+    ship_to_name: shipTo ? clip(formatShipTo(shipTo), 300) : clean(i.shipToName, 300),
   });
 
   const base = appUrl();
@@ -133,6 +198,21 @@ export async function createCheckout(i: {
                 ...(product.image_url && PAYPAL_IMAGE_RE.test(product.image_url) ? { imageUrl: product.image_url } : {}),
               },
             ],
+            ...(shipTo
+              ? {
+                  shipping: {
+                    name: { fullName: clip(shipTo.name, 300) },
+                    address: {
+                      addressLine1: clip(shipTo.line1, 300),
+                      ...(shipTo.line2 ? { addressLine2: clip(shipTo.line2, 300) } : {}),
+                      adminArea2: clip(shipTo.city, 120),
+                      adminArea1: clip(shipTo.state, 300),
+                      postalCode: clip(shipTo.postalCode, 60),
+                      countryCode: shipTo.countryCode || "US",
+                    },
+                  },
+                }
+              : {}),
           },
         ],
         paymentSource: {
@@ -140,7 +220,9 @@ export async function createCheckout(i: {
             experienceContext: {
               brandName: clip(`Shelf · ${shop.name}`, 127),
               userAction: PaypalExperienceUserAction.PayNow,
-              shippingPreference: PaypalWalletContextShippingPreference.GetFromFile,
+              shippingPreference: shipTo
+                ? PaypalWalletContextShippingPreference.SetProvidedAddress
+                : PaypalWalletContextShippingPreference.GetFromFile,
               returnUrl: `${base}/api/paypal/return?order=${order.id}`,
               cancelUrl: `${base}/paid?order=${order.id}&cancelled=1`,
             },
@@ -152,6 +234,11 @@ export async function createCheckout(i: {
   } catch (err) {
     await updateOrderStatus(order.id, "failed").catch(() => {});
     const issues = paypalIssues(err);
+    if (shipTo && issues.some((x) => /ADDRESS|POSTAL|SHIPPING|COUNTRY|STATE|CITY/.test(x))) {
+      throw new Error(
+        `PayPal didn't accept the shipping address (${describePaypalError(err)}). Check the street, city, state and ZIP with the buyer, or leave the ship_to fields empty to use the buyer's PayPal address.`,
+      );
+    }
     if (issues.some((x) => x.startsWith("PAYEE_"))) {
       throw new Error(`${shop.name}'s PayPal account can't receive payments right now, so this checkout couldn't be created.`);
     }

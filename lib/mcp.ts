@@ -3,7 +3,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { createCheckout, getCheckoutStatus } from "./checkout";
+import { createCheckout, formatShipTo, getCheckoutStatus, parseShipTo } from "./checkout";
 import { getProductWithShop, recentQueryForProduct } from "./repo";
 import { parsePriceCap, searchAll, type MarketHit, type ShelfHit } from "./search";
 import type { Order, Product, Shop } from "./types";
@@ -11,6 +11,8 @@ import type { Order, Product, Shop } from "./types";
 export type ShelfContext = {
   /** Which assistant is calling ("Claude", "ChatGPT", "AI agent", ...), shown on the seller dashboard. */
   clientName: string;
+  /** /try judge demo session (validated uuid) from `/api/mcp?session=`; scopes search to seed + that session's shops. */
+  session?: string | null;
 };
 
 const SERVER_INSTRUCTIONS = `Shelf connects you to independent small shops (ceramicists, candle makers, weavers, roasters, printers) whose products can be bought right here in the chat with PayPal.
@@ -215,7 +217,7 @@ function productDetails(product: Product, shop: Shop) {
   if (product.image_url && !product.image_url.startsWith("data:")) lines.push(`Image: ${product.image_url}`);
   lines.push(`Shop page: ${appUrl()}/s/${shop.slug}`);
   lines.push("");
-  lines.push("To buy: call create_checkout with this product_id (optional quantity, gift_note, ship_to_name).");
+  lines.push("To buy: call create_checkout with this product_id (optional quantity, gift_note; to ship to someone else, ship_to_name plus the full ship_to address).");
   return lines.join("\n");
 }
 
@@ -244,7 +246,10 @@ function statusText(order: Order, product: Product, shop: Shop) {
         shop.name
       }'s PayPal account and the order is on their Shelf dashboard.${
         order.ship_to_name ? ` Shipping to ${order.ship_to_name}.` : ""
-      }${order.gift_note ? ` Gift note: "${order.gift_note}".` : ""}\n(PayPal Sandbox test payment for the hackathon demo; the shipping name comes from the sandbox buyer account.)`;
+      }${order.gift_note ? ` Gift note: "${order.gift_note}".` : ""}\n(PayPal Sandbox test payment for the hackathon demo${
+        // An agent-set address is stored as "Name, street, City, ST zip"; a bare name came from the sandbox buyer account.
+        order.ship_to_name && /,.*\d/.test(order.ship_to_name) ? "" : "; the shipping name comes from the sandbox buyer account"
+      }.)`;
     case "refunded":
       return `${head}\nStatus: REFUNDED. The buyer's payment was returned in full.`;
     case "failed":
@@ -270,6 +275,9 @@ function publicOrder(order: Order) {
 }
 
 /** This deployment is the hackathon demo on PayPal Sandbox; say so plainly so assistants don't treat the sandbox link as a red flag. */
+const SHIP_TO_DESC = (what: string) =>
+  `${what} for the gift address. Required together (name, street, city, state, ZIP) when the gift ships to someone other than the buyer; leave all ship_to fields empty to use the buyer's PayPal address.`;
+
 const SANDBOX_NOTE =
   "Test mode: this Shelf deployment is the PayPal AI Hackathon demo and runs on PayPal Sandbox, so the sandbox.paypal.com link is expected and correct. The buyer approves it with a PayPal sandbox buyer account, not a real PayPal login. No real money moves.";
 
@@ -295,7 +303,7 @@ export function createShelfServer(ctx: ShelfContext): McpServer {
     },
     async ({ query, max_price }) => {
       try {
-        const { shelf, market } = await searchAll(query, { maxPrice: max_price ?? null, clientName: ctx.clientName });
+        const { shelf, market } = await searchAll(query, { maxPrice: max_price ?? null, clientName: ctx.clientName, session: ctx.session ?? null });
         for (const h of shelf) remember(lastQueryByProduct, h.product_id, query);
         const effectiveMax = max_price ?? parsePriceCap(query);
         return text(formatSearch(query, effectiveMax, shelf, market), {
@@ -373,13 +381,45 @@ export function createShelfServer(ctx: ShelfContext): McpServer {
         product_id: z.string().describe("The product_id from search_products"),
         quantity: z.number().int().min(1).max(20).optional().describe("How many to buy (default 1)"),
         gift_note: z.string().max(500).optional().describe("Optional gift message for the shop to include"),
-        ship_to_name: z.string().max(120).optional().describe("Optional recipient name if it's a gift for someone else"),
+        ship_to_name: z.string().max(120).optional().describe(SHIP_TO_DESC("Recipient's full name")),
+        ship_to_address_line1: z.string().max(300).optional().describe(SHIP_TO_DESC("Street address")),
+        ship_to_address_line2: z.string().max(300).optional().describe("Optional apartment, suite or unit for the gift address"),
+        ship_to_city: z.string().max(120).optional().describe(SHIP_TO_DESC("City")),
+        ship_to_state: z.string().max(100).optional().describe(SHIP_TO_DESC("State or region; 2-letter code in the US, e.g. OR")),
+        ship_to_postal_code: z.string().max(60).optional().describe(SHIP_TO_DESC("ZIP or postal code")),
+        ship_to_country: z.string().max(2).optional().describe("2-letter country code for the gift address (default US)"),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async ({ product_id, quantity, gift_note, ship_to_name }) => {
+    async ({
+      product_id,
+      quantity,
+      gift_note,
+      ship_to_name,
+      ship_to_address_line1,
+      ship_to_address_line2,
+      ship_to_city,
+      ship_to_state,
+      ship_to_postal_code,
+      ship_to_country,
+    }) => {
       const id = product_id.trim();
       if (!UUID_RE.test(id)) return toolError(`"${product_id}" is not a Shelf product_id. Use an id from search_products.`);
+      const ship = parseShipTo({
+        name: ship_to_name,
+        line1: ship_to_address_line1,
+        line2: ship_to_address_line2,
+        city: ship_to_city,
+        state: ship_to_state,
+        postalCode: ship_to_postal_code,
+        countryCode: ship_to_country,
+      });
+      if (ship?.missing) {
+        return toolError(
+          `The gift shipping address is incomplete. Missing: ${ship.missing.join(", ")}. Ask the buyer for the full address (name, street, city, state, ZIP) and call create_checkout again, or leave every ship_to field empty to ship to the buyer's own PayPal address.`,
+        );
+      }
+      const shipTo = ship?.shipTo ?? null;
       try {
         const { order, approveUrl, product, shop } = await createCheckout({
           productId: id,
@@ -387,7 +427,7 @@ export function createShelfServer(ctx: ShelfContext): McpServer {
           clientName: ctx.clientName,
           query: await queryForProduct(id),
           giftNote: gift_note?.trim() || null,
-          shipToName: ship_to_name?.trim() || null,
+          shipTo,
         });
         const s = [
           `Checkout ready: ${orderSummary(order, product, shop)}.`,
@@ -395,7 +435,10 @@ export function createShelfServer(ctx: ShelfContext): McpServer {
           `order_id: ${order.id}`,
           "",
           "Ask the buyer to open this PayPal link and approve; then call check_order with the order_id.",
-          `Nothing is charged until the buyer approves. Payment goes directly to ${shop.name}'s PayPal account; shipping uses the address in the buyer's PayPal account.`,
+          shipTo
+            ? `Shipping to ${formatShipTo(shipTo)}. PayPal shows this address on the approval page.`
+            : "Shipping uses the address in the buyer's PayPal account.",
+          `Nothing is charged until the buyer approves. Payment goes directly to ${shop.name}'s PayPal account.`,
           "Do not tell the buyer the order is paid until check_order says PAID.",
           SANDBOX_NOTE,
         ].join("\n");
@@ -404,6 +447,7 @@ export function createShelfServer(ctx: ShelfContext): McpServer {
           approve_url: approveUrl,
           product: { product_id: product.id, title: product.title, price: product.price, currency: product.currency },
           shop: { name: shop.name, slug: shop.slug },
+          ship_to: shipTo ? formatShipTo(shipTo) : null,
           next_step: "Buyer opens approve_url and approves in PayPal, then call check_order.",
         });
       } catch (err) {

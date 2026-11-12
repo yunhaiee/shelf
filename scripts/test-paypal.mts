@@ -2,7 +2,7 @@
 // Run: npx tsx --env-file=.env scripts/test-paypal.mts [--keep]
 //   --keep  leaves the temp shop/order in place so you can approve the printed link as the sandbox buyer
 //           and then watch /paid, the webhook and check_order work end to end.
-import { captureCheckout, createCheckout, getCheckoutStatus } from "../lib/checkout.ts";
+import { captureCheckout, createCheckout, getCheckoutStatus, parseShipTo } from "../lib/checkout.ts";
 import { describePaypalError, paypal } from "../lib/paypal.ts";
 import { pool } from "../lib/db.ts";
 import { createShop, deleteShopWithOrders, insertProducts, publishShop } from "../lib/repo.ts";
@@ -114,6 +114,48 @@ try {
   check("getCheckoutStatus unknown id -> null", (await getCheckoutStatus("00000000-0000-0000-0000-000000000000")) === null);
 
   await expectError("capture before approval explains itself", () => captureCheckout(order.paypal_order_id!), /hasn't approved/);
+
+  // ---- agent-set gift shipping (SET_PROVIDED_ADDRESS) ----
+  check("parseShipTo: nothing given -> null", parseShipTo({}) === null);
+  const partial = parseShipTo({ name: "Jiwoo Park", city: "Portland" });
+  check(
+    "parseShipTo: partial lists missing fields",
+    !!partial?.missing && partial.missing.join(",") === "ship_to_address_line1,ship_to_state,ship_to_postal_code",
+    partial?.missing?.join(","),
+  );
+  await expectError(
+    "partial shipTo is refused",
+    () => createCheckout({ productId: product.id, shipTo: { name: "Jiwoo Park", line1: "", city: "Portland", state: "OR", postalCode: "" } }),
+    /incomplete/,
+  );
+  const gift = await createCheckout({
+    productId: product.id,
+    clientName: "test-paypal",
+    giftNote: "For your new pour-over setup",
+    shipTo: { name: "Jiwoo Park", line1: "123 Maple Ave", city: "Portland", state: "or", postalCode: "97214" },
+  });
+  console.log(`
+gift order: ${gift.order.id} / ${gift.order.paypal_order_id}
+  approve URL: ${gift.approveUrl}`);
+  check("gift: approve URL present", /^https:\/\/www\.sandbox\.paypal\.com\//.test(gift.approveUrl), gift.approveUrl);
+  check(
+    "gift: ship_to_name stored as full line",
+    gift.order.ship_to_name === "Jiwoo Park, 123 Maple Ave, Portland, OR 97214",
+    gift.order.ship_to_name ?? "null",
+  );
+  const gpp = (await paypal().orders.getOrder({ id: gift.order.paypal_order_id! })).result;
+  const sh = gpp.purchaseUnits?.[0]?.shipping;
+  const a = sh?.address;
+  console.log("  PayPal shipping:", JSON.stringify(sh));
+  check("gift: PayPal shipping name = Jiwoo Park", sh?.name?.fullName === "Jiwoo Park", sh?.name?.fullName);
+  check(
+    "gift: PayPal shipping address matches",
+    a?.addressLine1 === "123 Maple Ave" && a?.adminArea2 === "Portland" && a?.adminArea1 === "OR" && a?.postalCode === "97214" && a?.countryCode === "US",
+    JSON.stringify(a),
+  );
+  const pref = gpp.paymentSource?.paypal?.experienceContext?.shippingPreference;
+  if (pref) check("gift: shipping_preference SET_PROVIDED_ADDRESS", pref === "SET_PROVIDED_ADDRESS", pref);
+  check("gift: PayPal approve link exists", (gpp.links ?? []).some((l) => l.rel === "payer-action" || l.rel === "approve"));
 
   if (keep) {
     console.log(`\n--keep: temp shop left in place. Approve as the sandbox buyer (${process.env.BUYER_PAYPAL_EMAIL}):`);
