@@ -1,7 +1,7 @@
 // Where the buyer lands after PayPal (return route redirect, or cancel_url). Calm, text-only confirmation.
 import type { Metadata } from "next";
 import { getCheckoutStatus } from "@/lib/checkout";
-import { updateOrderStatus } from "@/lib/repo";
+import { isDemoShop, updateOrderStatus } from "@/lib/repo";
 import type { Order, Product, Shop } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -107,7 +107,11 @@ export default async function PaidPage({ searchParams }: { searchParams: Promise
     console.error("[paid] could not load order:", err instanceof Error ? err.message : err);
   }
 
-  const view = viewFor(data?.order ?? null, data?.shop ?? null, flags);
+  let view = viewFor(data?.order ?? null, data?.shop ?? null, flags);
+  // Orders from the /try judge demo: the "assistant" is the Shelf demo tab the judge came from.
+  if (data && (await isDemoShop(data.shop.id).catch(() => false))) {
+    view = { ...view, body: view.body.replace(/your assistant/g, "the Shelf demo tab") };
+  }
   const showSummary = data && data.order.status !== "cancelled";
 
   return (

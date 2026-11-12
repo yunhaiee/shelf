@@ -40,7 +40,10 @@ export async function getShopById(id: string) {
 }
 
 export async function listPublishedShops() {
-  return query<Shop>(`select ${SHOP_COLS} from shops where status = 'published' order by published_at desc`);
+  // Shops made by judges on /try (demo_session set) stay out of public listings.
+  return query<Shop>(
+    `select ${SHOP_COLS} from shops where status = 'published' and demo_session is null order by published_at desc`,
+  );
 }
 
 /** Creates a draft shop with a unique slug. Returns the shop AND its edit_token (show to seller once). */
@@ -51,14 +54,17 @@ export async function createShop(input: {
   location?: string | null;
   paypal_email?: string | null;
   source_url?: string | null;
+  /** /try judge demo session id: the shop is visible only to that session's searches. */
+  demo_session?: string | null;
 }) {
   const base = slugify(input.name);
   let slug = base;
   for (let i = 2; await getShopBySlug(slug); i++) slug = `${base}-${i}`;
   return (await queryOne<Shop & { edit_token: string }>(
-    `insert into shops (slug, name, tagline, about, location, paypal_email, source_url)
-     values ($1,$2,$3,$4,$5,$6,$7) returning ${SHOP_COLS}, edit_token`,
-    [slug, input.name, input.tagline ?? null, input.about ?? null, input.location ?? null, input.paypal_email ?? null, input.source_url ?? null],
+    `insert into shops (slug, name, tagline, about, location, paypal_email, source_url, demo_session)
+     values ($1,$2,$3,$4,$5,$6,$7,$8) returning ${SHOP_COLS}, edit_token`,
+    [slug, input.name, input.tagline ?? null, input.about ?? null, input.location ?? null, input.paypal_email ?? null, input.source_url ?? null,
+     input.demo_session ?? null],
   ))!;
 }
 
@@ -99,14 +105,22 @@ export async function listProducts(shopId: string) {
   return (await query(`select * from products where shop_id = $1 order by created_at, title`, [shopId])).map(toProduct);
 }
 
-/** All products of published shops, with shop info, for agent search. */
-export async function listSearchableProducts() {
+/**
+ * All products of published shops, with shop info, for agent search.
+ * No session: every real shop, never /try demo shops. With a /try session: seed shops plus that session's own
+ * demo shops only (so a judge's before/after isn't spoiled by real published shops or other judges).
+ */
+export async function listSearchableProducts(opts: { session?: string | null } = {}) {
+  const session = opts.session ?? null;
   const rows = await query(
     `select p.*, s.name as shop_name, s.slug as shop_slug, s.location as shop_location, s.published_at as shop_published_at
        from products p join shops s on s.id = p.shop_id
       where s.status = 'published' and p.stock > 0
+        and (case when $1::text is null then s.demo_session is null
+                  else (s.demo_session = $1::text or (s.demo_session is null and s.source_url = 'seed')) end)
       order by s.published_at desc nulls last
       limit 500`,
+    [session],
   );
   return rows.map((r) => ({
     ...toProduct(r),
@@ -309,4 +323,33 @@ export async function recentQueryForProduct(productId: string) {
     [productId],
   );
   return r?.query ?? null;
+}
+
+// ---------- appended by A4 (/try one-link judge demo) ----------
+
+/** True if the shop was created from /try (a judge's throwaway demo copy). */
+export async function isDemoShop(shopId: string) {
+  const r = await queryOne<{ demo: boolean }>(`select demo_session is not null as demo from shops where id = $1`, [shopId]);
+  return r?.demo === true;
+}
+
+/** The most recent shop created by this /try session, with its edit token (server-side only). */
+export async function getDemoSessionShop(session: string) {
+  return queryOne<Shop & { edit_token: string }>(
+    `select ${SHOP_COLS}, edit_token from shops where demo_session = $1 order by created_at desc limit 1`,
+    [session],
+  );
+}
+
+/** Deletes /try demo shops older than `hours` (orders first: orders→products is RESTRICT). Returns how many. */
+export async function deleteStaleDemoShops(hours = 12) {
+  const stale = await query<{ id: string }>(
+    `select id from shops where demo_session is not null and created_at < now() - make_interval(hours => $1::int)`,
+    [hours],
+  );
+  if (stale.length === 0) return 0;
+  const ids = stale.map((r) => r.id);
+  await query(`delete from orders where shop_id = any($1::uuid[])`, [ids]);
+  await query(`delete from shops where id = any($1::uuid[])`, [ids]);
+  return ids.length;
 }

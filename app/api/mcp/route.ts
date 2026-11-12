@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 1_000_000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function jsonRpcError(status: number, code: number, message: string, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify({ jsonrpc: "2.0", error: { code, message }, id: null }), {
@@ -37,7 +38,12 @@ export async function POST(req: Request) {
   }
   const forwarded = new Request(req.url, { method: "POST", headers });
 
-  const server = createShelfServer({ clientName: resolveClientName(body, req.headers) });
+  // /try judge demo: the in-page assistant connects with ?session=<uuid> so search sees only seed shops + that judge's copy.
+  const rawSession = new URL(req.url).searchParams.get("session")?.trim() ?? "";
+  const session = UUID_RE.test(rawSession) ? rawSession.toLowerCase() : null;
+  let clientName = resolveClientName(body, req.headers);
+  if (session && clientName === "AI agent") clientName = "Claude";
+  const server = createShelfServer({ clientName, session });
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless: a fresh server + transport per request
     enableJsonResponse: true,

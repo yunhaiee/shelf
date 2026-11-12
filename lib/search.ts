@@ -246,14 +246,14 @@ function toShelfHit(p: SearchableProduct, why: string): ShelfHit {
 /** Ranked, relevance-filtered products from published Shelf shops. Never throws for AI failures. */
 export async function searchShelf(
   query: string,
-  opts: { maxPrice?: number | null; limit?: number } = {},
+  opts: { maxPrice?: number | null; limit?: number; session?: string | null } = {},
 ): Promise<ShelfHit[]> {
   const q = query.trim();
   if (!q) return [];
   const limit = Math.max(1, Math.min(20, opts.limit ?? DEFAULT_LIMIT));
   const maxPrice = opts.maxPrice ?? parsePriceCap(q);
 
-  const all = await listSearchableProducts();
+  const all = await listSearchableProducts({ session: opts.session ?? null });
   const pool = maxPrice != null ? all.filter((p) => p.price <= maxPrice) : all;
   if (pool.length === 0) return [];
 
@@ -320,12 +320,12 @@ async function searchMarketSafe(query: string, maxPrice: number | null): Promise
 /** Shelf + Channel3 in parallel, then logs the search (the demand signal sellers see). */
 export async function searchAll(
   query: string,
-  opts: { maxPrice?: number | null; clientName?: string | null } = {},
+  opts: { maxPrice?: number | null; clientName?: string | null; session?: string | null } = {},
 ): Promise<{ shelf: ShelfHit[]; market: MarketHit[] }> {
   const q = query.trim();
   const maxPrice = opts.maxPrice ?? parsePriceCap(q);
   const [shelf, market] = await Promise.all([
-    searchShelf(q, { maxPrice }).catch((err) => {
+    searchShelf(q, { maxPrice, session: opts.session ?? null }).catch((err) => {
       console.error("[search] Shelf search failed:", err);
       return [] as ShelfHit[];
     }),
