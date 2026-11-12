@@ -24,7 +24,8 @@ const bodySchema = z.object({
       .optional()
       .transform((s) => s || null)
       .refine((s) => s == null || z.email().safeParse(s).success, "PayPal email doesn't look like an email address."),
-    source_url: optText(2048),
+    // 'seed' and 'try' are server-only markers (seed shops show up in /try searches); clients can't claim them.
+    source_url: optText(2048).transform((s) => (s && ["seed", "try"].includes(s.toLowerCase()) ? null : s)),
   }),
   products: z.array(draftProductSchema).max(200, "Up to 200 products at a time."),
 });

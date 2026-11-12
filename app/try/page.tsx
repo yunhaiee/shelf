@@ -7,7 +7,7 @@ import { appUrl } from "@/components/app-url";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { TryFlow } from "@/components/try/TryFlow";
 import { DEMO_SHOP_SLUG } from "@/lib/demo";
-import { getShopBySlug } from "@/lib/repo";
+import { getRealShopBySlug } from "@/lib/repo";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -27,7 +27,7 @@ async function caption() {
 
 async function sampleAvailable() {
   try {
-    const shop = await getShopBySlug(DEMO_SHOP_SLUG);
+    const shop = await getRealShopBySlug(DEMO_SHOP_SLUG);
     return shop?.status === "published";
   } catch {
     return false;

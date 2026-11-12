@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 import { handle, jsonError, readJson } from "@/lib/auth";
 import { DEMO_SHOP_SLUG } from "@/lib/demo";
 import { importCatalog } from "@/lib/importer";
-import { getShopBySlug, listProducts } from "@/lib/repo";
+import { getRealShopBySlug, listProducts } from "@/lib/repo";
 import type { DraftProduct } from "@/lib/types";
 import { MAX_TEXT_CHARS, rateLimit } from "../_shared";
 
@@ -23,7 +23,7 @@ function describeError(err: unknown): { status: number; error: string } {
 }
 
 async function readyMadeCopy() {
-  const shop = await getShopBySlug(DEMO_SHOP_SLUG);
+  const shop = await getRealShopBySlug(DEMO_SHOP_SLUG);
   if (!shop || shop.status !== "published") return null;
   const products = await listProducts(shop.id);
   if (products.length === 0) return null;

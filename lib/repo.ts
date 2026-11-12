@@ -35,6 +35,11 @@ export async function getShopBySlug(slug: string) {
   return queryOne<Shop>(`select ${SHOP_COLS} from shops where slug = $1`, [slug]);
 }
 
+/** A real (non-/try) shop by slug. Use this for the fixed demo slug so a judge's copy can never stand in for it. */
+export async function getRealShopBySlug(slug: string) {
+  return queryOne<Shop>(`select ${SHOP_COLS} from shops where slug = $1 and demo_session is null`, [slug]);
+}
+
 export async function getShopById(id: string) {
   return queryOne<Shop>(`select ${SHOP_COLS} from shops where id = $1`, [id]);
 }
@@ -57,7 +62,10 @@ export async function createShop(input: {
   /** /try judge demo session id: the shop is visible only to that session's searches. */
   demo_session?: string | null;
 }) {
-  const base = slugify(input.name);
+  // /try demo copies get their own slug space so they never take a real shop's slug (e.g. "hanul-clay").
+  const base = input.demo_session
+    ? `${slugify(input.name).slice(0, 36)}-try-${input.demo_session.replace(/[^a-z0-9]/gi, "").slice(0, 6).toLowerCase()}`
+    : slugify(input.name);
   let slug = base;
   for (let i = 2; await getShopBySlug(slug); i++) slug = `${base}-${i}`;
   return (await queryOne<Shop & { edit_token: string }>(

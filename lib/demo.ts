@@ -1,14 +1,14 @@
 // Public, read-only view of the demo shop's dashboard (/dash/demo), so judges can watch an order they place
 // land without the seller's key. Strips everything that identifies the seller's PayPal account or the buyer.
 import { publicShop } from "./auth";
-import { getShopBySlug, listOrders, listRecentSearches, listShopSearches } from "./repo";
+import { getRealShopBySlug, listOrders, listRecentSearches, listShopSearches } from "./repo";
 import type { Order, Shop } from "./types";
 
 export const DEMO_SHOP_SLUG = process.env.DEMO_SHOP_SLUG?.trim() || "hanul-clay";
 
 /** The published demo shop, or null if it isn't live (e.g. between demo re-recordings). */
 export async function getDemoShop(): Promise<Shop | null> {
-  const shop = await getShopBySlug(DEMO_SHOP_SLUG);
+  const shop = await getRealShopBySlug(DEMO_SHOP_SLUG);
   return shop && shop.status === "published" ? shop : null;
 }
 

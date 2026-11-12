@@ -38,26 +38,28 @@ function newSessionId() {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Session id from ?s=, else this tab's sessionStorage, else a new one. Kept in both so a reload keeps the demo. */
+/**
+ * This tab's session id from sessionStorage (survives a reload), else a new one. Never put in the URL: the id is
+ * the session's only key, so a copied /try link must not share it.
+ */
 function resolveSession(): string {
-  const url = new URL(window.location.href);
-  let id = url.searchParams.get("s");
-  if (!id || !UUID_RE.test(id)) {
-    try {
-      id = window.sessionStorage.getItem(SESSION_KEY);
-    } catch {
-      id = null;
-    }
+  let id: string | null = null;
+  try {
+    id = window.sessionStorage.getItem(SESSION_KEY);
+  } catch {
+    id = null;
   }
   if (!id || !UUID_RE.test(id)) id = newSessionId();
   id = id.toLowerCase();
   try {
     window.sessionStorage.setItem(SESSION_KEY, id);
   } catch {
-    /* storage blocked: the URL still carries it */
+    /* storage blocked: the session lasts until reload */
   }
-  if (url.searchParams.get("s") !== id) {
-    url.searchParams.set("s", id);
+  // Older links carried ?s=<id>; drop it so nobody re-shares it.
+  const url = new URL(window.location.href);
+  if (url.searchParams.has("s")) {
+    url.searchParams.delete("s");
     window.history.replaceState(null, "", url.toString());
   }
   return id;

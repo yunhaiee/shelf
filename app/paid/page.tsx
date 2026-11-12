@@ -22,6 +22,11 @@ function when(ts: string | null) {
   return new Date(ts).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Los_Angeles" }) + " PT";
 }
 
+/** The gift address the agent set at checkout (name plus a street/ZIP), or null when PayPal's buyer address is used. */
+function agentShipTo(order: Order) {
+  return order.ship_to_name && /,.*\d/.test(order.ship_to_name) ? order.ship_to_name : null;
+}
+
 type View = { eyebrow: string; title: string; body: string };
 
 function viewFor(order: Order | null, shop: Shop | null, flags: { cancelled: boolean; error: boolean }): View {
@@ -37,7 +42,9 @@ function viewFor(order: Order | null, shop: Shop | null, flags: { cancelled: boo
       return {
         eyebrow: "Paid",
         title: "Payment approved.",
-        body: `You can go back to your assistant. ${shop.name} has your order and ships to the address on your PayPal account.`,
+        body: `You can go back to your assistant. ${shop.name} has your order and ships to ${
+          agentShipTo(order) ?? "the address on your PayPal account"
+        }.`,
       };
     case "approved":
       return {
@@ -130,6 +137,7 @@ export default async function PaidPage({ searchParams }: { searchParams: Promise
             <Row label="Shop">{data.shop.name}</Row>
             <Row label="Total">{money(data.order.amount, data.order.currency)}</Row>
             {data.order.paid_at && <Row label="Paid">{when(data.order.paid_at)}</Row>}
+            {agentShipTo(data.order) && <Row label="Ships to">{agentShipTo(data.order)}</Row>}
             {data.order.gift_note && <Row label="Gift note">{data.order.gift_note}</Row>}
             <Row label="Order" mono>
               {data.order.id}
