@@ -112,7 +112,7 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
             <Link href="/#connect" className="link">
               connect Shelf
             </Link>
-            , then ask for what you&rsquo;re looking for. You approve every payment in PayPal.
+            , then ask &ldquo;Use Shelf to find something from {shop.name}.&rdquo; You approve every payment in PayPal.
           </p>
         </section>
 
@@ -123,18 +123,22 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
             <ul className="border-t border-line">
               {products.map((p) => {
                 const attrs = attrRows(p);
+                // No photo: a text-led row with no empty image box.
+                const hasImage = !!p.image_url;
                 return (
                   <li
                     key={p.id}
                     id={`p-${p.id}`}
-                    className="grid scroll-mt-8 gap-6 border-b border-line py-10 sm:grid-cols-[220px_1fr] sm:gap-10 lg:grid-cols-[280px_1fr_260px]"
+                    className={`grid scroll-mt-8 gap-6 border-b border-line py-10 sm:gap-10 ${
+                      hasImage ? "sm:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr_260px]" : "lg:grid-cols-[1fr_260px]"
+                    }`}
                   >
-                    <div className="aspect-square w-full max-w-[320px] border border-line bg-surface">
-                      {p.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.image_url} alt={p.title} loading="lazy" className="h-full w-full object-cover" />
-                      ) : null}
-                    </div>
+                    {hasImage && (
+                      <div className="aspect-square w-full max-w-[320px] border border-line bg-surface">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.image_url!} alt={p.title} loading="lazy" className="h-full w-full object-cover" />
+                      </div>
+                    )}
 
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
@@ -149,7 +153,11 @@ export default async function ShopPage({ params }: { params: Promise<{ slug: str
                     </div>
 
                     {attrs.length > 0 && (
-                      <dl className="grid h-fit grid-cols-[96px_1fr] gap-x-4 gap-y-2 text-[14px] sm:col-start-2 lg:col-start-auto">
+                      <dl
+                        className={`grid h-fit grid-cols-[96px_1fr] gap-x-4 gap-y-2 text-[14px] ${
+                          hasImage ? "sm:col-start-2 lg:col-start-auto" : ""
+                        }`}
+                      >
                         {attrs.map(([k, v]) => (
                           <div key={k} className="contents">
                             <dt className="text-muted">{k}</dt>

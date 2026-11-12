@@ -159,14 +159,16 @@ async function importWithProgress(
   throw new ApiError("The import stopped before it finished. Please try again.", 0);
 }
 
-const SAMPLE_LIST = `Alder & Pine — small-batch woodwork, Asheville NC
-everything carved by hand from local hardwood, finished w/ food-safe oil
+// A caption-style sample from a different maker, so trying it never duplicates a real demo shop.
+const SAMPLE_LIST = `tidewater indigo · portland, maine
+new batch hung to dry this weekend!! shop update sunday 7pm eastern
 
-cherry wood spoon 24
-walnut serving board – 68 (big one, great for cheese)
-maple coffee scoop $18
-butter knife set of 2 / 30
-oak spatula (left-handed ones too!!)`;
+indigo tea towel 26 (linen, gets softer every wash)
+shibori napkins set of 4 - 48
+big dyed throw blanket… only 2, DM for price
+canvas tote $34, deep blue, fits a laptop
+
+all hand-dyed by me in my backyard vat. ships in 3 days. DM to order, i'll send a paypal invoice!`;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -250,9 +252,9 @@ function shopToForm(s: Shop): ShopForm {
 
 function tryQuery(rows: CatalogRow[]) {
   const r = rows.find((x) => x.title && x.price) ?? rows[0];
-  if (!r) return "Find me something handmade from a small independent shop";
+  if (!r) return "Use Shelf to find me something handmade from a small independent shop";
   const under = r.price ? ` under ${money(Math.ceil((r.price + 5) / 10) * 10)}` : "";
-  return `Find me a ${r.title.toLowerCase()} from a small independent shop${under}`;
+  return `Use Shelf to find me a ${r.title.toLowerCase()} from a small independent shop${under}`;
 }
 
 // ---------- component ----------
@@ -288,6 +290,8 @@ export function SellFlow({ resumeShopId }: { resumeShopId: string | null }) {
 
   const liveRef = useRef<HTMLDivElement | null>(null);
   const live = shop?.status === "published";
+  // The Live band only renders client-side after import or resume, so reading window here can't mismatch SSR.
+  const shopPageUrl = shop ? `${typeof window !== "undefined" ? window.location.origin : ""}/s/${shop.slug}` : "";
 
   // Resume editing an existing shop (/sell?shop=id), authorized by the stored token or cookie.
   useEffect(() => {
@@ -640,7 +644,7 @@ export function SellFlow({ resumeShopId }: { resumeShopId: string | null }) {
           <div className="lg:col-span-5">
             <h1 className="display text-[52px] sm:text-[72px]">Bring your shop.</h1>
             <p className="mt-6 max-w-[46ch] text-[17px] leading-[1.6] text-ink/80">
-              Paste a link to your shop or a list of what you sell. Shelf&rsquo;s AI writes the details assistants need,
+              Paste a link to your shop, an Instagram caption, or a list of what you sell. Shelf&rsquo;s AI writes the details assistants need,
               and Channel3 checks what similar pieces sell for. Nothing goes live until you publish.
             </p>
           </div>
@@ -650,7 +654,7 @@ export function SellFlow({ resumeShopId }: { resumeShopId: string | null }) {
               {(
                 [
                   ["url", "Shop link"],
-                  ["text", "Paste a list"],
+                  ["text", "Paste a caption or list"],
                 ] as const
               ).map(([m, label]) => (
                 <button
@@ -701,13 +705,13 @@ export function SellFlow({ resumeShopId }: { resumeShopId: string | null }) {
                       What you sell, however it&rsquo;s written
                     </label>
                     <button type="button" className="link text-[12px] text-muted" onClick={() => setText(SAMPLE_LIST)}>
-                      Use a sample list
+                      Use a sample caption
                     </button>
                   </div>
                   <textarea
                     id="shop-text"
                     rows={9}
-                    placeholder={"speckled mug 28\nblue celadon cup $34, holds about 8oz\noatmeal bowl — dm for price"}
+                    placeholder={"batch 14 is out of the kiln!!\nspeckled mug 28 (the everyday one)\nblue celadon cup 34, no handle\nbig platter, DM for price"}
                     className="field mono text-[14px] leading-[1.6]"
                     value={text}
                     onChange={(e) => setText(e.target.value)}
@@ -804,6 +808,18 @@ export function SellFlow({ resumeShopId }: { resumeShopId: string | null }) {
                 <button type="button" className="link text-[14px] text-muted" onClick={unpublish}>
                   Unpublish
                 </button>
+              </div>
+              <div className={`mt-10 max-w-[720px] ${justPublished ? "rise rise-3" : ""}`}>
+                <p className="eyebrow">Your agent-ready page</p>
+                <div className="mt-3 flex items-stretch border border-line bg-surface">
+                  <code className="mono min-w-0 flex-1 overflow-x-auto whitespace-nowrap px-4 py-3 text-[14px]">
+                    {shopPageUrl}
+                  </code>
+                  <CopyButton value={shopPageUrl} className="link border-l border-line px-4 text-[13px] no-underline" />
+                </div>
+                <p className="mt-2 text-[13px] text-muted">
+                  Put it in your Instagram bio. Any AI that reads the web sees your prices, stock and how to buy.
+                </p>
               </div>
               <div className={`mt-10 max-w-[720px] ${justPublished ? "rise rise-3" : ""}`}>
                 <p className="label">Try it in Claude</p>

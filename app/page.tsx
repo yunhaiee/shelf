@@ -33,7 +33,7 @@ async function loadShops(): Promise<ShopSummary[]> {
 
 const SALE_STEPS = [
   {
-    title: "Paste your shop link or a messy list.",
+    title: "Paste your shop link, a caption or a messy list.",
     body: "Shelf reads it and writes what assistants need to recommend a piece with confidence: size, material, care, who it suits.",
   },
   {
@@ -75,13 +75,16 @@ export default async function Home() {
                 Connect Shelf to Claude
               </a>
             </div>
+            <Link href="/try" className="rise rise-3 link mt-5 inline-block text-[15px]">
+              Try the whole flow in one page &rarr;
+            </Link>
           </div>
 
           <figure className="lg:col-span-5 lg:pt-4" aria-label="Example conversation in Claude">
             <figcaption className="eyebrow mb-6">In Claude, two minutes after a shop publishes</figcaption>
             <div className="border-l border-line pl-6 text-[15px] leading-[1.6]">
               <p className="text-[12px] font-medium text-muted">You</p>
-              <p className="mt-1">Find a speckled mug from a small studio, under $40. It&rsquo;s a gift.</p>
+              <p className="mt-1">Use Shelf to find a speckled mug from a small studio, under $40. It&rsquo;s a gift.</p>
 
               <p className="mt-7 text-[12px] font-medium text-muted">Claude</p>
               <p className="mt-1">
@@ -104,8 +107,11 @@ export default async function Home() {
           <div className="py-14 md:pr-12 lg:py-20">
             <p className="eyebrow">For sellers</p>
             <h2 className="display mt-4 text-[40px] sm:text-[48px]">Open your shop</h2>
-            <p className="prose-measure mt-5 text-ink/80">
-              Bring the shop you already have. Shelf reads your site or a pasted list, fills in the details assistants ask
+            <p className="prose-measure mt-5 text-[17px] leading-[1.5]">
+              Agentic commerce is being built for sellers with catalogs. Shelf is for the ones who sell from a caption.
+            </p>
+            <p className="prose-measure mt-4 text-ink/80">
+              Bring the shop you already have. Shelf reads your site, an Instagram caption or a pasted list, fills in the details assistants ask
               about, and puts you in front of every assistant connected to Shelf. No new storefront, no app for your
               customers to install.
             </p>
@@ -139,7 +145,7 @@ export default async function Home() {
                 <>
                   Choose <span className="font-medium">Add custom connector</span>, name it Shelf, and paste the URL above.
                 </>,
-                <>Ask Claude to find something from a small shop. When you&rsquo;re ready, approve the PayPal link.</>,
+                <>Ask Claude: &ldquo;Use Shelf to find &hellip;&rdquo;. When you&rsquo;re ready, approve the PayPal link.</>,
               ].map((step, i) => (
                 <li key={i} className="grid grid-cols-[28px_1fr] gap-2">
                   <span className="mono pt-[2px] text-[13px] text-muted">{i + 1}</span>

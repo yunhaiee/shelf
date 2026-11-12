@@ -303,7 +303,7 @@ export function Dashboard(props: { shopId: string; demo?: false } | { demo: true
         <dl className="grid grid-cols-2 border-y border-line md:grid-cols-4">
           <Stat i={0} label="Paid revenue" value={stats.revenue} />
           <Stat i={1} label="Orders" value={`${stats.paidCount}`} sub={`${stats.orderCount} started`} />
-          <Stat i={2} label="Assistants recommended you" value={`${stats.found}`} sub="top Shelf result" />
+          <Stat i={2} label="Times assistants recommended you" value={`${stats.found}`} sub="as the top Shelf result" />
           <Stat i={3} label="Unmet searches on Shelf" value={`${stats.unmet}`} sub={`of last ${data.network.length}`} />
         </dl>
       </section>
@@ -324,6 +324,7 @@ export function Dashboard(props: { shopId: string; demo?: false } | { demo: true
       <section className="wrap-wide mt-16 grid gap-12 lg:grid-cols-12 lg:gap-10">
         <div className="min-w-0 lg:col-span-8">
           <div className="mb-4">
+            <p className="eyebrow mb-2">Includes sample search history</p>
             <h2 className="display text-[32px] sm:text-[40px]">Agent demand</h2>
             <p className="mt-1 max-w-[70ch] text-[13px] text-muted">
               What shoppers recently asked assistants across Shelf. &ldquo;Nothing on Shelf&rdquo; is open demand no shop
