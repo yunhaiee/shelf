@@ -117,7 +117,7 @@ function minutesSince(iso: string | null) {
 }
 
 function appUrl() {
-  return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  return (process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
 function text(s: string, structured: Record<string, unknown>): CallToolResult {

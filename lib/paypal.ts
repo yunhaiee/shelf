@@ -193,5 +193,5 @@ export const WEBHOOK_EVENTS = [
 ] as const;
 
 export function appUrl(): string {
-  return (process.env.APP_URL || "http://localhost:3000").replace(/\/+$/, "");
+  return (process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || "http://localhost:3000").replace(/\/+$/, "");
 }
