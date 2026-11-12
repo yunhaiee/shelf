@@ -1,0 +1,50 @@
+# Render Blueprint for Shelf. https://render.com/docs/blueprint-spec
+# The Postgres database already exists (Render Postgres, Oregon) and is passed in via DATABASE_URL,
+# so this Blueprint deliberately creates no database.
+services:
+  # Shelf: Next.js app = seller UI, dashboard, MCP server (/api/mcp), PayPal return + webhook routes.
+  - type: web
+    name: shelf
+    runtime: node
+    plan: free
+    region: oregon # same region as the database
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Public base URL of this service, e.g. https://shelf-xxxx.onrender.com (used for PayPal return/cancel URLs,
+      # the webhook URL and the MCP URL shown to shoppers). Set after the first deploy.
+      - key: APP_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      # Printed by scripts/register-webhook.mts once APP_URL is live.
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: SELLER_PAYPAL_EMAIL
+        sync: false
+      - key: PLATFORM_PAYPAL_EMAIL
+        sync: false
+      - key: BUYER_PAYPAL_EMAIL
+        sync: false
+      - key: BUYER_PAYPAL_PASSWORD
+        sync: false
+      - key: CHANNEL3_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  # Hanul Clay: the fictional ceramic studio's plain static site, used as the import source in the demo.
+  - type: web
+    name: hanul-clay
+    runtime: static
+    rootDir: demo-shop
+    buildCommand: ""
+    staticPublishPath: .

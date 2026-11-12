@@ -1,0 +1,38 @@
+{
+  "name": "shelf",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build --turbopack",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "@channel3/sdk": "^4.9.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@paypal/paypal-server-sdk": "^2.5.0",
+    "ag-grid-community": "^36.3.0",
+    "ag-grid-react": "^36.3.0",
+    "next": "15.5.29",
+    "pg": "^8.23.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.29",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  }
+}

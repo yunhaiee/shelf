@@ -1,0 +1,301 @@
+// Checkout on PayPal Orders v2. The seller's own PayPal account is the payee, so money goes straight
+// to the shop; Shelf only creates the order, captures it after the buyer approves, and tracks status.
+import {
+  CheckoutPaymentIntent,
+  ItemCategory,
+  PaypalExperienceUserAction,
+  PaypalWalletContextShippingPreference,
+  type Order as PaypalOrder,
+} from "@paypal/paypal-server-sdk";
+import { appUrl, describePaypalError, paypal, paypalIssues, paypalStatusCode } from "./paypal";
+import {
+  createOrderRow,
+  getOrderById,
+  getOrderByPaypalId,
+  getProductWithShop,
+  setOrderPaypalId,
+  updateOrderStatus,
+} from "./repo";
+import type { Order, Product, Shop } from "./types";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_QTY = 99;
+const ZERO_DECIMAL = new Set(["JPY", "HUF", "TWD"]);
+
+// ---------- money: integer minor units, never float math ----------
+
+function minorDigits(currency: string) {
+  return ZERO_DECIMAL.has(currency.toUpperCase()) ? 0 : 2;
+}
+
+function toMinor(amount: number, currency: string) {
+  return Math.round(amount * 10 ** minorDigits(currency));
+}
+
+/** Minor units -> PayPal value string ("56.00"). */
+function formatMinor(minor: number, currency: string) {
+  const d = minorDigits(currency);
+  if (d === 0) return String(minor);
+  const s = String(Math.abs(minor)).padStart(3, "0");
+  return `${minor < 0 ? "-" : ""}${s.slice(0, -2)}.${s.slice(-2)}`;
+}
+
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+const clean = (s: string | null | undefined, n: number) => {
+  const t = s?.trim();
+  return t ? t.slice(0, n) : null;
+};
+
+// PayPal rejects item image URLs that don't match its pattern; only send ones that will pass.
+const PAYPAL_IMAGE_RE = /^https:[/.\w\s-]*\.(?:jpg|gif|png|jpeg)$/i;
+
+function approveLink(o: PaypalOrder) {
+  return (o.links ?? []).find((l) => l.rel === "payer-action")?.href ?? (o.links ?? []).find((l) => l.rel === "approve")?.href;
+}
+
+// ---------- create ----------
+
+export async function createCheckout(i: {
+  productId: string;
+  qty?: number;
+  clientName?: string | null;
+  query?: string | null;
+  giftNote?: string | null;
+  shipToName?: string | null;
+}): Promise<{ order: Order; approveUrl: string; product: Product; shop: Shop }> {
+  const productId = String(i.productId ?? "").trim();
+  if (!UUID_RE.test(productId)) throw new Error(`No product with id "${productId}". Use a product_id from search_products.`);
+
+  const qty = i.qty == null ? 1 : Number(i.qty);
+  if (!Number.isInteger(qty) || qty < 1) throw new Error("Quantity must be a whole number of at least 1.");
+  if (qty > MAX_QTY) throw new Error(`Quantity can be at most ${MAX_QTY} per checkout.`);
+
+  const found = await getProductWithShop(productId);
+  if (!found) throw new Error(`No product with id "${productId}". It may have been removed by the shop.`);
+  const { product, shop } = found;
+
+  if (shop.status !== "published") throw new Error(`${shop.name} isn't taking orders on Shelf right now.`);
+  if (!shop.paypal_email) throw new Error(`${shop.name} hasn't connected a PayPal account yet, so it can't take payments.`);
+  if (product.stock <= 0) throw new Error(`"${product.title}" from ${shop.name} is out of stock.`);
+  if (product.stock < qty) throw new Error(`Only ${product.stock} of "${product.title}" left in stock.`);
+
+  const currency = (product.currency || "USD").toUpperCase();
+  const unitMinor = toMinor(product.price, currency);
+  if (!Number.isFinite(unitMinor) || unitMinor <= 0) throw new Error(`"${product.title}" doesn't have a valid price yet.`);
+  const totalMinor = unitMinor * qty;
+  const unit = formatMinor(unitMinor, currency);
+  const total = formatMinor(totalMinor, currency);
+
+  const order = await createOrderRow({
+    product_id: product.id,
+    shop_id: shop.id,
+    qty,
+    amount: Number(total),
+    currency,
+    client_name: clean(i.clientName, 120),
+    query: clean(i.query, 500),
+    gift_note: clean(i.giftNote, 500),
+    ship_to_name: clean(i.shipToName, 300),
+  });
+
+  const base = appUrl();
+  const shopUrl = base.startsWith("https://") ? `${base}/s/${shop.slug}` : undefined;
+  const description = product.description?.trim();
+
+  let created: PaypalOrder;
+  try {
+    const res = await paypal().orders.createOrder({
+      paypalRequestId: `create-${order.id}`,
+      prefer: "return=representation",
+      body: {
+        intent: CheckoutPaymentIntent.Capture,
+        purchaseUnits: [
+          {
+            referenceId: order.id,
+            customId: order.id,
+            invoiceId: `shelf-${order.id}`,
+            description: clip(`${shop.name} via Shelf`, 127),
+            payee: { emailAddress: shop.paypal_email },
+            amount: {
+              currencyCode: currency,
+              value: total,
+              breakdown: { itemTotal: { currencyCode: currency, value: total } },
+            },
+            items: [
+              {
+                name: clip(product.title, 127),
+                quantity: String(qty),
+                unitAmount: { currencyCode: currency, value: unit },
+                category: ItemCategory.PhysicalGoods,
+                sku: product.id,
+                ...(description ? { description: clip(description, 127) } : {}),
+                ...(shopUrl ? { url: shopUrl } : {}),
+                ...(product.image_url && PAYPAL_IMAGE_RE.test(product.image_url) ? { imageUrl: product.image_url } : {}),
+              },
+            ],
+          },
+        ],
+        paymentSource: {
+          paypal: {
+            experienceContext: {
+              brandName: clip(`Shelf · ${shop.name}`, 127),
+              userAction: PaypalExperienceUserAction.PayNow,
+              shippingPreference: PaypalWalletContextShippingPreference.GetFromFile,
+              returnUrl: `${base}/api/paypal/return?order=${order.id}`,
+              cancelUrl: `${base}/paid?order=${order.id}&cancelled=1`,
+            },
+          },
+        },
+      },
+    });
+    created = res.result;
+  } catch (err) {
+    await updateOrderStatus(order.id, "failed").catch(() => {});
+    const issues = paypalIssues(err);
+    if (issues.some((x) => x.startsWith("PAYEE_"))) {
+      throw new Error(`${shop.name}'s PayPal account can't receive payments right now, so this checkout couldn't be created.`);
+    }
+    throw new Error(`PayPal couldn't create the checkout: ${describePaypalError(err)}`);
+  }
+
+  const approveUrl = created.id ? approveLink(created) : undefined;
+  if (!created.id || !approveUrl) {
+    await updateOrderStatus(order.id, "failed").catch(() => {});
+    throw new Error("PayPal created the order but returned no approval link. Please try again.");
+  }
+  const saved = (await setOrderPaypalId(order.id, created.id)) ?? { ...order, paypal_order_id: created.id };
+  return { order: saved, approveUrl, product, shop };
+}
+
+// ---------- capture / sync ----------
+
+/** Applies a PayPal order snapshot to the local order row. Never downgrades paid/refunded (repo guarantees). */
+async function applyPaypalOrder(local: Order, pp: PaypalOrder): Promise<Order> {
+  const unit = pp.purchaseUnits?.[0];
+  const capture = unit?.payments?.captures?.[0];
+  const refunded = (unit?.payments?.refunds ?? []).some((r) => r.status === "COMPLETED");
+  const payerEmail = pp.paymentSource?.paypal?.emailAddress ?? pp.payer?.emailAddress ?? null;
+  const shipName = local.ship_to_name ? null : (unit?.shipping?.name?.fullName ?? null);
+  const extra = { capture_id: capture?.id ?? null, payer_email: payerEmail, ship_to_name: shipName };
+
+  let next: Order["status"] | null = null;
+  if (refunded || capture?.status === "REFUNDED") next = "refunded";
+  else if (capture?.status === "COMPLETED" || capture?.status === "PARTIALLY_REFUNDED") next = "paid";
+  else if (capture?.status === "DECLINED" || capture?.status === "FAILED") next = "failed";
+  else if (capture?.status === "PENDING" || pp.status === "APPROVED") next = "approved";
+  else if (pp.status === "VOIDED") next = "cancelled";
+  else if (pp.status === "COMPLETED") next = "paid";
+
+  if (!next) return local;
+  if (next === local.status && !extra.capture_id && !extra.payer_email) return local;
+  return (await updateOrderStatus(local.id, next, extra)) ?? local;
+}
+
+const inflightCaptures = new Map<string, Promise<Order>>();
+
+/** Captures an approved order. Idempotent: safe to call from the return route, the webhook, and check_order at once. */
+export async function captureCheckout(paypalOrderId: string): Promise<Order> {
+  const existing = inflightCaptures.get(paypalOrderId);
+  if (existing) return existing;
+  const p = doCapture(paypalOrderId).finally(() => inflightCaptures.delete(paypalOrderId));
+  inflightCaptures.set(paypalOrderId, p);
+  return p;
+}
+
+async function doCapture(paypalOrderId: string): Promise<Order> {
+  const local = await getOrderByPaypalId(paypalOrderId);
+  if (!local) throw new Error(`No Shelf order for PayPal order ${paypalOrderId}.`);
+  if (local.status === "paid" || local.status === "refunded") return local;
+
+  const { orders } = paypal();
+  let pp: PaypalOrder;
+  try {
+    pp = (
+      await orders.captureOrder({ id: paypalOrderId, paypalRequestId: `capture-${local.id}`, prefer: "return=representation" })
+    ).result;
+  } catch (err) {
+    const issues = paypalIssues(err);
+    if (issues.includes("ORDER_ALREADY_CAPTURED") || issues.includes("DUPLICATE_INVOICE_ID") || paypalStatusCode(err) === 422) {
+      // Already captured elsewhere (or another business-rule rejection): trust PayPal's current view of the order.
+      try {
+        pp = (await orders.getOrder({ id: paypalOrderId })).result;
+      } catch {
+        throw new Error(`PayPal couldn't capture this payment: ${describePaypalError(err)}`);
+      }
+      if (pp.status !== "COMPLETED") {
+        if (issues.includes("INSTRUMENT_DECLINED")) {
+          throw new Error("The buyer's payment method was declined. Ask them to open the PayPal link again and pick another way to pay.");
+        }
+        if (issues.includes("ORDER_NOT_APPROVED") || issues.includes("PAYER_ACTION_REQUIRED")) {
+          throw new Error("The buyer hasn't approved this payment in PayPal yet.");
+        }
+        throw new Error(`PayPal couldn't capture this payment: ${describePaypalError(err)}`);
+      }
+    } else {
+      throw new Error(`PayPal couldn't capture this payment: ${describePaypalError(err)}`);
+    }
+  }
+  return applyPaypalOrder(local, pp);
+}
+
+/** Order status for agents/dashboard. Accepts a Shelf order uuid or a PayPal order id. Refreshes from PayPal while unpaid. */
+export async function getCheckoutStatus(orderId: string): Promise<{ order: Order; product: Product; shop: Shop } | null> {
+  const id = String(orderId ?? "").trim();
+  if (!id) return null;
+  let order = UUID_RE.test(id) ? await getOrderById(id) : await getOrderByPaypalId(id);
+  if (!order) return null;
+
+  if (order.paypal_order_id && (order.status === "created" || order.status === "approved" || order.status === "cancelled")) {
+    try {
+      const pp = (await paypal().orders.getOrder({ id: order.paypal_order_id })).result;
+      if (pp.status === "APPROVED") {
+        // Buyer approved but never landed on our return URL (closed the tab): finish the payment now.
+        order = await captureCheckout(order.paypal_order_id).catch(() => applyPaypalOrder(order!, pp));
+      } else {
+        order = await applyPaypalOrder(order, pp);
+      }
+    } catch (err) {
+      console.warn(`[checkout] status refresh failed for ${order.id}: ${describePaypalError(err)}`);
+    }
+  }
+
+  const found = await getProductWithShop(order.product_id);
+  if (!found) return null;
+  return { order, product: found.product, shop: found.shop };
+}
+
+/**
+ * Full refund of the order's capture. Only a COMPLETED refund marks the order 'refunded'; a PENDING one
+ * (e.g. the seller's balance is short) leaves it 'paid' until the PAYMENT.CAPTURE.REFUNDED webhook lands.
+ * The capture belongs to the seller (payee routing), so PayPal may require partner permission from the seller;
+ * that case surfaces as a readable error telling the seller to refund from their own PayPal account.
+ */
+export async function refundOrder(orderId: string): Promise<Order> {
+  const status = await getCheckoutStatus(orderId);
+  if (!status) throw new Error(`No order with id "${orderId}".`);
+  const { order, shop } = status;
+  if (order.status === "refunded") return order;
+  if (order.status !== "paid" || !order.capture_id) {
+    throw new Error(`Only paid orders can be refunded (this one is ${order.status}).`);
+  }
+  try {
+    const res = await paypal().payments.refundCapturedPayment({
+      captureId: order.capture_id,
+      paypalRequestId: `refund-${order.id}`,
+      prefer: "return=representation",
+      body: { noteToPayer: clip(`Refund from ${shop.name} via Shelf`, 255) },
+    });
+    const st = res.result.status;
+    if (st === "FAILED" || st === "CANCELLED") throw new Error(`PayPal reported the refund as ${st.toLowerCase()}.`);
+    if (st !== "COMPLETED") return order; // PENDING: not refunded yet; the webhook finishes the transition.
+  } catch (err) {
+    const issues = paypalIssues(err);
+    if (!issues.includes("CAPTURE_FULLY_REFUNDED")) {
+      if (issues.some((x) => x === "PERMISSION_DENIED" || x === "NOT_AUTHORIZED")) {
+        throw new Error(`PayPal didn't let Shelf refund on ${shop.name}'s behalf. The seller can refund it from their PayPal account.`);
+      }
+      throw new Error(err instanceof Error && !paypalStatusCode(err) ? err.message : `PayPal couldn't refund this order: ${describePaypalError(err)}`);
+    }
+  }
+  return (await updateOrderStatus(order.id, "refunded")) ?? { ...order, status: "refunded" };
+}
