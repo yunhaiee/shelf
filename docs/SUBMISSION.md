@@ -5,11 +5,11 @@
 **Tagline:** Make any small shop buyable by AI assistants in two minutes, with PayPal checkout in the chat.
 
 **Links**
-- Hosted app: `<HOSTED_URL>`
-- MCP endpoint (add to Claude Desktop as a custom connector): `<HOSTED_URL>/api/mcp`
+- Hosted app: https://shelf-ltfn.onrender.com
+- MCP endpoint (add to Claude Desktop as a custom connector): `https://shelf-ltfn.onrender.com/api/mcp`
 - Demo video: `<VIDEO_URL>`
-- Source: `<REPO_URL>`
-- Demo shop used in the video (fictional): `<DEMO_SHOP_URL>`
+- Source: https://github.com/yunhaiee/shelf
+- Demo shop used in the video (fictional): https://hanul-clay.onrender.com
 
 ---
 
@@ -142,8 +142,8 @@ and all published shops, so shops can be discovered on the open web too.
 
 ## Testing instructions for judges
 
-1. Claude Desktop → Settings → Connectors → Add custom connector → URL `<HOSTED_URL>/api/mcp`.
-2. In a browser tab, open `<HOSTED_URL>/dash/demo`: Hanul Clay's seller dashboard, read-only (the seller's
+1. Claude Desktop → Settings → Connectors → Add custom connector → URL `https://shelf-ltfn.onrender.com/api/mcp`.
+2. In a browser tab, open `https://shelf-ltfn.onrender.com/dash/demo`: Hanul Clay's seller dashboard, read-only (the seller's
    PayPal email and buyer details are hidden). Leave it open.
 3. Ask Claude: "Find me a speckled mug from a small studio under $40, I'd like to buy it."
 4. Ask Claude to buy it, open the PayPal link, and log in with the sandbox buyer:
@@ -151,7 +151,7 @@ and all published shops, so shops can be discovered on the open web too.
 5. Ask Claude "did it go through?". `check_order` reports paid.
 6. Back on the dashboard tab, your order row flashes as paid, with "Claude" as the assistant and what you asked.
    Scroll down for the agent demand grid and press "Analyze demand" for insights.
-7. To try the seller side yourself, open `<HOSTED_URL>/sell`, paste `<DEMO_SHOP_URL>` (or any small shop page),
+7. To try the seller side yourself, open `https://shelf-ltfn.onrender.com/sell`, paste https://hanul-clay.onrender.com (or any small shop page),
    and publish with a sandbox business email. Your shop gets its own private dashboard link.
 
 The free Render instance sleeps when idle, so the first request may take up to a minute. All shops other than

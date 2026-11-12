@@ -7,9 +7,9 @@ Channel3 suggests prices, and on Publish the shop is searchable **and buyable** 
 Shelf. Checkout runs through PayPal: the buyer approves every payment, and the money goes straight to the
 seller's own PayPal account.
 
-- Hosted app: `<HOSTED_URL>`
-- MCP endpoint (for Claude Desktop): `<HOSTED_URL>/api/mcp`
-- Demo shop used in the video (fictional): `<DEMO_SHOP_URL>`
+- Hosted app: https://shelf-ltfn.onrender.com
+- MCP endpoint (for Claude Desktop): `https://shelf-ltfn.onrender.com/api/mcp`
+- Demo shop used in the video (fictional): https://hanul-clay.onrender.com
 - Demo video (under 3 minutes): `<VIDEO_URL>`
 
 Built for the PayPal AI Hackathon. MIT licensed.
@@ -151,7 +151,7 @@ it never to claim an order is paid until `check_order` says so.
 
 ## MCP tools
 
-Endpoint: `POST <HOSTED_URL>/api/mcp`. Stateless streamable HTTP, JSON responses, no auth. Server name `shelf`.
+Endpoint: `POST https://shelf-ltfn.onrender.com/api/mcp`. Stateless streamable HTTP, JSON responses, no auth. Server name `shelf`.
 
 | Tool | Input | Returns |
 |---|---|---|
@@ -165,7 +165,7 @@ Orders record which assistant placed them (MCP `clientInfo`, else the User-Agent
 ## Connect Claude Desktop
 
 1. Claude Desktop → **Settings → Connectors → Add custom connector**.
-2. Name it `Shelf`, URL `<HOSTED_URL>/api/mcp`.
+2. Name it `Shelf`, URL `https://shelf-ltfn.onrender.com/api/mcp`.
 3. In a new chat, ask for something a Shelf shop sells, e.g. "a speckled mug from a small studio under $40".
 
 ## Try it in the PayPal sandbox
@@ -178,7 +178,7 @@ Everything runs against the PayPal **sandbox**. No real money moves.
    `<SANDBOX_BUYER_EMAIL>` / `<SANDBOX_BUYER_PASSWORD>` (from the submission's testing notes), or any sandbox
    buyer from their own PayPal developer dashboard.
 4. Approve. You land on Shelf's "Payment approved" page. Ask Claude to check the order: it reports paid.
-5. Open `<HOSTED_URL>/dash/demo`, the demo shop's seller dashboard (read-only), to see your order with the
+5. Open `https://shelf-ltfn.onrender.com/dash/demo`, the demo shop's seller dashboard (read-only), to see your order with the
    assistant and what you asked. Open it before you approve to watch the row flash as paid. A shop you publish
    yourself gets its own private dashboard link after publishing.
 
@@ -211,7 +211,7 @@ npm run dev                                     # http://localhost:3000
 Webhooks need a public HTTPS URL, so register them against the deployed app:
 
 ```bash
-APP_URL=<HOSTED_URL> npx tsx --env-file=.env scripts/register-webhook.mts   # prints the PAYPAL_WEBHOOK_ID
+APP_URL=https://shelf-ltfn.onrender.com npx tsx --env-file=.env scripts/register-webhook.mts   # prints the PAYPAL_WEBHOOK_ID
 ```
 
 Locally, the return-URL capture still marks orders paid without webhooks.

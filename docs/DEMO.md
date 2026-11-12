@@ -11,10 +11,10 @@ footage. Talk at a calm pace, about 2.5 words a second; each VO block below fits
 
 1. `npx tsx --env-file=.env scripts/seed.mts --reset-demo`: removes Hanul Clay and its orders, re-anchors the
    seed shops and the 7-day search history to now.
-2. Open `<HOSTED_URL>` once and wait for it to load. The free Render instance sleeps when idle, and the first
+2. Open https://shelf-ltfn.onrender.com once and wait for it to load. The free Render instance sleeps when idle, and the first
    request is slow.
-3. Open `<DEMO_SHOP_URL>` (the Hanul Clay static site) once, for the same reason.
-4. Claude Desktop: the Shelf connector (`<HOSTED_URL>/api/mcp`) is added and enabled. Start a **new chat**.
+3. Open https://hanul-clay.onrender.com (the Hanul Clay static site) once, for the same reason.
+4. Claude Desktop: the Shelf connector (`https://shelf-ltfn.onrender.com/api/mcp`) is added and enabled. Start a **new chat**.
 5. Browser: logged **out** of PayPal sandbox, in a fresh profile or private window. Have the sandbox buyer
    login ready to paste.
 6. Have the sandbox seller PayPal email ready to paste into `/sell`.
@@ -50,7 +50,7 @@ price, then the FAQ ("send me a message... I'll send you an invoice").
 
 ### 3. Import (0:30 to 0:55)
 
-**Screen:** `<HOSTED_URL>/sell`. Paste `<DEMO_SHOP_URL>`, press Import. The progress lines follow the server's
+**Screen:** `https://shelf-ltfn.onrender.com/sell`. Paste https://hanul-clay.onrender.com, press Import. The progress lines follow the server's
 real steps: "Reading your shop…", "Writing agent-ready details…", then "Checking market prices with Channel3…"
 with a live count ("3 of 6"). Every line shows for at least a moment, even on a fast run. Cut the wait and put a
 small "sped up" label in the corner.
