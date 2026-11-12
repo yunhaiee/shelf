@@ -14,7 +14,8 @@ footage. Talk at a calm pace, about 2.5 words a second; each VO block below fits
 2. Open https://shelf-ltfn.onrender.com once and wait for it to load. The free Render instance sleeps when idle, and the first
    request is slow.
 3. Open https://hanul-clay.onrender.com (the Hanul Clay static site) once, for the same reason.
-4. Claude Desktop: the Shelf connector (`https://shelf-ltfn.onrender.com/api/mcp`) is added and enabled. Start a **new chat**.
+4. Claude Desktop: the Shelf connector (`https://shelf-ltfn.onrender.com/api/mcp`) is added and enabled, with its tools
+   set to **Always allow** (no permission pop-ups on camera). Start a **new chat**.
 5. Browser: logged **out** of PayPal sandbox, in a fresh profile or private window. Have the sandbox buyer
    login ready to paste.
 6. Have the sandbox seller PayPal email ready to paste into `/sell`.
@@ -30,7 +31,10 @@ footage. Talk at a calm pace, about 2.5 words a second; each VO block below fits
 ### 1. Cold open: the gap (0:00 to 0:18)
 
 **Screen:** Claude Desktop, new chat. Type:
-> Find me a speckled mug from a small studio, under $40. I want to buy it as a gift.
+> Use Shelf to find me a speckled mug from a small studio, under $40. I want to buy it as a gift.
+
+Say "Shelf" in this first ask. Without it, Claude Desktop sometimes answers from its own web search and never calls
+the connector. Later asks in the same chat stay on Shelf.
 
 Claude calls `search_products`. No Shelf results yet; it shows market results from Channel3, each a link to
 another site. Hold on Claude's reply where it says you'll need to buy on the retailer's site.
