@@ -505,6 +505,7 @@ export async function importCatalog(
     .filter((p) => p.title.trim())
     .slice(0, MAX_PRODUCTS)
     .map((p) => toDraft(p, images, nums));
+  fillMissingImages(drafts, images);
   if (drafts.length === 0) throw new ImportError("We couldn't find any products there. Try pasting your product list as text.", 422);
 
   let done = 0;
@@ -570,3 +571,30 @@ export const productPatchSchema = z
     stock: z.coerce.number().int().min(0).max(100_000),
   })
   .partial();
+
+/**
+ * Deterministic backstop when the model leaves image_index null: pair a product with an unused page image
+ * whose filename/alt shares at least two words with the title (or one distinctive word, if only one matches).
+ */
+function fillMissingImages(drafts: DraftProduct[], images: PageImage[]) {
+  const words = (s: string) =>
+    new Set(s.toLowerCase().replace(/\.[a-z0-9]+(\?.*)?$/, "").split(/[^a-z0-9]+/).filter((w) => w.length > 2));
+  const used = new Set(drafts.map((d) => d.image_url).filter(Boolean));
+  for (const d of drafts) {
+    if (d.image_url) continue;
+    const title = words(d.title);
+    let best: { url: string; score: number } | null = null;
+    for (const im of images) {
+      if (used.has(im.url) || im.alt === "og:image") continue;
+      const file = decodeURIComponent(im.url.split("/").pop() ?? "");
+      const cand = new Set([...words(file), ...words(im.alt)]);
+      const score = [...title].filter((w) => cand.has(w)).length;
+      if (score > 0 && (!best || score > best.score)) best = { url: im.url, score };
+    }
+    const unique = best && images.filter((im) => !used.has(im.url)).length > 0;
+    if (best && unique && (best.score >= 2 || title.size <= 2)) {
+      d.image_url = best.url;
+      used.add(best.url);
+    }
+  }
+}

@@ -957,7 +957,7 @@ export function SellFlow({ resumeShopId }: { resumeShopId: string | null }) {
                   </ul>
                 ) : issues.length > 0 ? (
                   <p className="text-[15px] text-ink/80">
-                    Before you publish: {issues.map((i) => i.replace(/\.$/, "").toLowerCase()).join("; ")}.
+                    Before you publish: {issues.map((i) => i.replace(/\.$/, "").replace(/^\w/, (c) => c.toLowerCase())).join("; ")}.
                   </p>
                 ) : (
                   <p className="text-[15px] text-ink/80">
