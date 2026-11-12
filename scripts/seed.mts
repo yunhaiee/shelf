@@ -1,6 +1,7 @@
 // Seed the Shelf network with demo data so it looks lived-in.
 //   npx tsx --env-file=.env scripts/seed.mts                         idempotent: safe to re-run
-//   npx tsx --env-file=.env scripts/seed.mts --reset-demo   first delete "Hanul Clay" (+ its orders) to re-record the demo
+//   npx tsx --env-file=.env scripts/seed.mts --reset-demo   first delete "Hanul Clay" (+ its orders), demo-session shops
+//                                                            and non-seed searches from the last 24h, to re-record the demo
 //
 // Seeds 4 fictional published shops (none sell ceramics, so the demo search only matches Hanul Clay after it
 // publishes) and ~40 agent search-log rows over the past 7 days. ALL OF THIS IS DEMO DATA.
@@ -179,52 +180,58 @@ const SHOPS: SeedShop[] = [
 
 // ---------- seed agent searches (network demand), past 7 days ----------
 
-type SeedSearch = { q: string; max: number | null; client: "Claude" | "ChatGPT" | "AI agent"; hoursAgo: number; market: number; hit?: string; hits?: number };
+type SeedSearch = { q: string; max: number | null; client: "Claude" | "AI agent"; hoursAgo: number; market: number; hit?: string; hits?: number };
 
 const SEARCHES: SeedSearch[] = [
   // ceramics: nobody on Shelf sells these yet (this is the demand Hanul Clay walks into)
   { q: "speckled ceramic mug gift", max: 40, client: "Claude", hoursAgo: 2, market: 8 },
-  { q: "handmade stoneware bowl", max: null, client: "ChatGPT", hoursAgo: 5, market: 8 },
+  { q: "handmade stoneware bowl", max: null, client: "AI agent", hoursAgo: 5, market: 8 },
   { q: "speckled bowl", max: null, client: "Claude", hoursAgo: 9, market: 8 },
   { q: "small studio ceramics under $40", max: 40, client: "Claude", hoursAgo: 14, market: 7 },
   { q: "celadon cup", max: null, client: "AI agent", hoursAgo: 20, market: 6 },
-  { q: "speckled bowl for ramen", max: 45, client: "ChatGPT", hoursAgo: 26, market: 8 },
+  { q: "speckled bowl for ramen", max: 45, client: "AI agent", hoursAgo: 26, market: 8 },
   { q: "handmade mug from a small studio", max: 40, client: "Claude", hoursAgo: 31, market: 8 },
   { q: "speckled bowl", max: 50, client: "Claude", hoursAgo: 38, market: 8 },
-  { q: "celadon tea cup handmade", max: null, client: "ChatGPT", hoursAgo: 44, market: 5 },
+  { q: "celadon tea cup handmade", max: null, client: "AI agent", hoursAgo: 44, market: 5 },
   { q: "pottery gift for my sister under $50", max: 50, client: "Claude", hoursAgo: 52, market: 8 },
   { q: "handmade bud vase", max: 30, client: "AI agent", hoursAgo: 60, market: 7 },
-  { q: "speckled ceramic mug gift", max: null, client: "ChatGPT", hoursAgo: 70, market: 8 },
+  { q: "speckled ceramic mug gift", max: null, client: "AI agent", hoursAgo: 70, market: 8 },
   { q: "handmade stoneware bowl", max: 40, client: "Claude", hoursAgo: 80, market: 8 },
   { q: "speckled bowl set of two", max: 80, client: "Claude", hoursAgo: 95, market: 6 },
-  { q: "espresso cups handmade pair", max: 45, client: "ChatGPT", hoursAgo: 110, market: 7 },
+  { q: "espresso cups handmade pair", max: 45, client: "AI agent", hoursAgo: 110, market: 7 },
   { q: "small batch pottery mug", max: 35, client: "Claude", hoursAgo: 130, market: 8 },
   { q: "handmade serving platter", max: null, client: "AI agent", hoursAgo: 150, market: 6 },
-  { q: "speckled bowl", max: null, client: "ChatGPT", hoursAgo: 160, market: 8 },
+  { q: "speckled bowl", max: null, client: "AI agent", hoursAgo: 160, market: 8 },
   { q: "ceramic pour over coffee dripper", max: 45, client: "Claude", hoursAgo: 165, market: 8 },
   { q: "hand-thrown planter with drainage", max: 60, client: "Claude", hoursAgo: 7, market: 6 },
   // served by the seed shops
   { q: "soy candle gift under $35", max: 35, client: "Claude", hoursAgo: 3, market: 8, hit: "Cedar & Smoke Soy Candle", hits: 3 },
-  { q: "beeswax taper candles", max: null, client: "ChatGPT", hoursAgo: 12, market: 6, hit: "Beeswax Taper Candles, pair", hits: 1 },
+  { q: "beeswax taper candles", max: null, client: "AI agent", hoursAgo: 12, market: 6, hit: "Beeswax Taper Candles, pair", hits: 1 },
   { q: "linen napkins set", max: 60, client: "Claude", hoursAgo: 18, market: 8, hit: "Linen Napkins, set of 4", hits: 2 },
   { q: "linen apron for a baker", max: null, client: "Claude", hoursAgo: 29, market: 7, hit: "Linen Cross-Back Apron", hits: 1 },
-  { q: "whole bean coffee from a small roaster", max: 25, client: "ChatGPT", hoursAgo: 34, market: 8, hit: "Ridge House Blend, 12 oz", hits: 4 },
+  { q: "whole bean coffee from a small roaster", max: 25, client: "AI agent", hoursAgo: 34, market: 8, hit: "Ridge House Blend, 12 oz", hits: 4 },
   { q: "decaf coffee beans", max: null, client: "AI agent", hoursAgo: 47, market: 8, hit: "Colombia Huila Decaf, 12 oz", hits: 1 },
   { q: "letterpress thank you cards", max: null, client: "Claude", hoursAgo: 56, market: 6, hit: "Thank You Letterpress Card", hits: 2 },
-  { q: "handmade birthday card", max: 10, client: "ChatGPT", hoursAgo: 66, market: 7, hit: "Birthday Card, Hand-Set Type", hits: 1 },
+  { q: "handmade birthday card", max: 10, client: "AI agent", hoursAgo: 66, market: 7, hit: "Birthday Card, Hand-Set Type", hits: 1 },
   { q: "housewarming gift under $40", max: 40, client: "Claude", hoursAgo: 75, market: 8, hit: "Fig Leaf Soy Candle", hits: 3 },
   { q: "linen tea towel", max: 30, client: "Claude", hoursAgo: 88, market: 8, hit: "Washed Linen Tea Towel", hits: 1 },
-  { q: "coffee gift for dad", max: 30, client: "ChatGPT", hoursAgo: 100, market: 8, hit: "Roaster's Sampler, 3 x 4 oz", hits: 2 },
+  { q: "coffee gift for dad", max: 30, client: "AI agent", hoursAgo: 100, market: 8, hit: "Roaster's Sampler, 3 x 4 oz", hits: 2 },
   { q: "wedding thank you cards letterpress", max: null, client: "Claude", hoursAgo: 120, market: 5, hit: "Wedding Thank-You Set, 12 cards", hits: 1 },
   { q: "natural fiber bath towel", max: 80, client: "AI agent", hoursAgo: 140, market: 7, hit: "Waffle Weave Linen Bath Towel", hits: 1 },
   { q: "2027 wall calendar", max: 40, client: "Claude", hoursAgo: 155, market: 8, hit: "2027 Letterpress Wall Calendar", hits: 1 },
-  { q: "travel candle set", max: 30, client: "ChatGPT", hoursAgo: 162, market: 6, hit: "Travel Tin Candle Trio", hits: 1 },
+  { q: "travel candle set", max: 30, client: "AI agent", hoursAgo: 162, market: 6, hit: "Travel Tin Candle Trio", hits: 1 },
   // other unmet demand
-  { q: "wool throw blanket handwoven", max: 150, client: "ChatGPT", hoursAgo: 40, market: 8 },
+  { q: "wool throw blanket handwoven", max: 150, client: "AI agent", hoursAgo: 40, market: 8 },
   { q: "small batch hot sauce gift set", max: 40, client: "AI agent", hoursAgo: 85, market: 8 },
   { q: "hand-bound leather notebook", max: 50, client: "Claude", hoursAgo: 105, market: 7 },
-  { q: "unscented natural soap bar", max: 15, client: "ChatGPT", hoursAgo: 125, market: 8 },
+  { q: "unscented natural soap bar", max: 15, client: "AI agent", hoursAgo: 125, market: 8 },
   { q: "handmade wooden cutting board", max: 80, client: "Claude", hoursAgo: 145, market: 8 },
+  // pour-over drippers: unmet ceramic demand that closes the demo (append-only: ids are by array index)
+  { q: "handmade pour over coffee dripper", max: 50, client: "Claude", hoursAgo: 4, market: 8 },
+  { q: "ceramic pour over cone gift", max: 45, client: "AI agent", hoursAgo: 23, market: 7 },
+  { q: "stoneware coffee dripper small studio", max: null, client: "Claude", hoursAgo: 49, market: 6 },
+  { q: "pour over dripper and mug set handmade", max: 80, client: "Claude", hoursAgo: 72, market: 7 },
+  { q: "handmade coffee dripper", max: 40, client: "AI agent", hoursAgo: 101, market: 8 },
 ];
 
 const seedSearchId = (i: number) => `5eed0000-0000-4000-8000-${(i + 1).toString(16).padStart(12, "0")}`;
@@ -233,26 +240,47 @@ const SEED_ID_PREFIX = "5eed0000-0000-4000-8000-";
 // ---------- steps ----------
 
 async function resetDemo() {
-  const shops = await query<{ id: string; slug: string }>(
+  // 1) Hanul Clay (the demo seller) and 2) any demo-session shops judges created via the try-it flow.
+  const hanul = await query<{ id: string; slug: string }>(
     `select id, slug from shops
       where coalesce(source_url, '') <> 'seed'
         and (lower(name) like 'hanul clay%' or slug ~ '^hanul-clay(-[0-9]+)?$')`,
   );
-  if (shops.length === 0) {
-    console.log("reset-demo: no Hanul Clay shop found, nothing to delete");
-    return;
+  // shops.demo_session is added by a separate migration; only use it if the column exists.
+  const hasDemoSession = !!(await queryOne(
+    `select 1 from information_schema.columns
+      where table_schema = current_schema() and table_name = 'shops' and column_name = 'demo_session'`,
+  ));
+  const sessionShops = hasDemoSession
+    ? await query<{ id: string; slug: string }>(
+        `select id, slug from shops where demo_session is not null and coalesce(source_url, '') <> 'seed'`,
+      )
+    : [];
+
+  const byId = new Map([...hanul, ...sessionShops].map((s) => [s.id, s]));
+  const ids = [...byId.keys()];
+  let orders = 0;
+  let answered = 0;
+  if (ids.length) {
+    // Order matters: orders.product_id is ON DELETE RESTRICT, so orders go before the shop cascade.
+    orders = (await query(`delete from orders where shop_id = any($1::uuid[]) returning id`, [ids])).length;
+    // Rehearsal searches these shops answered would otherwise linger in the demand grid.
+    answered = (await query(
+      `delete from searches where top_product_id in (select id from products where shop_id = any($1::uuid[])) returning id`,
+      [ids],
+    )).length;
+    await query(`delete from shops where id = any($1::uuid[])`, [ids]);
   }
-  const ids = shops.map((s) => s.id);
-  // Order matters: orders.product_id is ON DELETE RESTRICT, so orders go before the shop cascade.
-  const orders = await query(`delete from orders where shop_id = any($1::uuid[]) returning id`, [ids]);
-  // Rehearsal searches that Hanul Clay answered would otherwise linger in the demand grid.
-  const searches = await query(
-    `delete from searches where top_product_id in (select id from products where shop_id = any($1::uuid[])) returning id`,
-    [ids],
+  // 3) Rehearsal / judge searches from the last 24h (seed rows have fixed 5eed… ids and are kept).
+  const recent = await query(
+    `delete from searches where id::text not like $1 and created_at > now() - interval '24 hours' returning id`,
+    [`${SEED_ID_PREFIX}%`],
   );
-  await query(`delete from shops where id = any($1::uuid[])`, [ids]);
   console.log(
-    `reset-demo: deleted ${shops.length} shop(s) [${shops.map((s) => s.slug).join(", ")}], ${orders.length} order(s), ${searches.length} search row(s) it answered`,
+    `reset-demo: deleted ${hanul.length} Hanul Clay shop(s)` +
+      (hanul.length ? ` [${hanul.map((s) => s.slug).join(", ")}]` : "") +
+      `, ${hasDemoSession ? `${sessionShops.length} demo-session shop(s)` : "demo-session: column not present, skipped"}` +
+      `, ${orders} order(s), ${answered} search row(s) they answered, ${recent.length} non-seed search row(s) from the last 24h`,
   );
 }
 

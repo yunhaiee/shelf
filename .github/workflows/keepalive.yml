@@ -1,0 +1,21 @@
+# Keeps the free Render instance warm for judges: free web services spin down after ~15 min idle and take
+# ~30-60s to cold-start, which can time out a judge's first MCP call. Pinging every 10 min avoids that.
+# GitHub may delay scheduled runs by a few minutes; failures are swallowed so this never alerts anyone.
+name: keepalive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Shelf health
+        run: curl -fsS --max-time 90 -o /dev/null -w "shelf %{http_code} in %{time_total}s\n" https://shelf-ltfn.onrender.com/api/health || true
+      - name: Ping Hanul Clay demo site
+        run: curl -fsS --max-time 90 -o /dev/null -w "hanul-clay %{http_code} in %{time_total}s\n" https://hanul-clay.onrender.com/ || true
